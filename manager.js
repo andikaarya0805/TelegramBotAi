@@ -290,24 +290,35 @@ function startUserbotListener(userObj, ownerChatId) {
     // For MVP, we attach it to the userObj so checking /back can clear it
     userObj.interactedUsers = interactedUsers;
 
-        // Listen for incoming messages on the USER'S account
+    // Listen for incoming messages on the USER'S account
     client.addEventHandler(async (event) => {
         const message = event.message;
         const now = Date.now();
         
+        // Log all incoming messages for debugging Cloud issues
+        console.log(`[Userbot] Received event. Message: "${message.message?.substring(0, 20)}..." | AFK: ${userObj.isAfk} | Out: ${message.out}`);
+
         // Ignore messages from the BOT itself to prevent loops
         const senderId = String(message.senderId);
         if (senderId === String(process.env.TELEGRAM_BOT_TOKEN.split(':')[0])) {
             return;
         }
 
-        if (!userObj.isAfk) return;
+        if (!userObj.isAfk) {
+            // console.log("[Userbot] Ignored: Not in AFK mode.");
+            return;
+        }
         
-        // Only reply to Private Chats (isPrivate property)
-        // And ignore messages from SELF (me)
-        if (event.isPrivate && !message.out) {
+        // Determine if it's a private chat
+        const isPrivate = message.peerId instanceof Api.PeerUser;
+        
+        // Only reply to Private Chats and ignore messages from SELF (me)
+        if (isPrivate && !message.out) {
+            console.log(`[Userbot] Processing private message from ${senderId}`);
+            
             // 1. Error Silence Period (Stop failure loops)
             if (errorSilence.has(senderId) && now < errorSilence.get(senderId)) {
+                console.log(`[Userbot] Silence active for ${senderId}.`);
                 return;
             }
 
