@@ -281,9 +281,10 @@ app.post('/webhook', async (req, res) => {
 // --- USERBOT LOGIC ---
 function startUserbotListener(userObj, ownerChatId) {
     const client = userObj.client;
-    // Cache to track who we've already introduced ourselves to
-    // Set<SenderID>
+    // Cache for session
     const interactedUsers = new Set();
+    const cooldowns = new Map();
+    const errorSilence = new Map();
     
     // Reset cache when AFK is toggled OFF (need to hook into the main logic or just clear here periodically)
     // For MVP, we attach it to the userObj so checking /back can clear it
@@ -292,6 +293,7 @@ function startUserbotListener(userObj, ownerChatId) {
         // Listen for incoming messages on the USER'S account
     client.addEventHandler(async (event) => {
         const message = event.message;
+        const now = Date.now();
         
         // Ignore messages from the BOT itself to prevent loops
         const senderId = String(message.senderId);
@@ -304,6 +306,17 @@ function startUserbotListener(userObj, ownerChatId) {
         // Only reply to Private Chats (isPrivate property)
         // And ignore messages from SELF (me)
         if (event.isPrivate && !message.out) {
+            // 1. Error Silence Period (Stop failure loops)
+            if (errorSilence.has(senderId) && now < errorSilence.get(senderId)) {
+                return;
+            }
+
+            // 2. Cooldown (Don't spam Gemini)
+            if (cooldowns.has(senderId) && (now - cooldowns.get(senderId)) < 5000) {
+                return;
+            }
+            cooldowns.set(senderId, now);
+
             const sender = await message.getSender();
             const senderName = sender.firstName || "Bro";
             const incomingText = message.text;
@@ -334,18 +347,27 @@ function startUserbotListener(userObj, ownerChatId) {
             // Check if first message
             const isFirstMessage = !userObj.interactedUsers.has(sender.id);
             
-            const reply = await geminiService.generateContent(incomingText, ownerName, isFirstMessage);
-            
-            // Mark as interacted
-            if (isFirstMessage) {
-                userObj.interactedUsers.add(sender.id);
+            try {
+                const reply = await geminiService.generateContent(incomingText, ownerName, isFirstMessage);
+                
+                // Mark as interacted
+                if (isFirstMessage) {
+                    userObj.interactedUsers.add(sender.id);
+                }
+                
+                // Send Reply AS THE USER
+                await client.sendMessage(sender.id, { message: reply });
+            } catch (e) {
+                console.error(`[Userbot] Gemini Error for ${senderName}:`, e.message);
+                
+                // Set silence period for 60 seconds if Quota exceeded
+                if (e.message?.includes('429') || (e.response && e.response.status === 429)) {
+                    errorSilence.set(senderId, now + 60000); 
+                    console.log(`[Userbot] Quota Exceeded. Silencing ${senderName} for 60s.`);
+                }
+                
+                await client.sendMessage(sender.id, { message: "Ada masalah teknis nih bro. Coba lagi ya." });
             }
-            
-            // Send Reply AS THE USER
-            await client.sendMessage(sender.id, { message: reply });
-            
-            // Optional: Notify Owner via Chatbot?
-            // await telegramService.sendMessage(ownerChatId, `📩 **Auto-Reply Sent** to ${senderName}`);
         }
         
         // Auto-Disable if User replies manually?
