@@ -10,7 +10,7 @@ async function sendMessage(chatId, text) {
     const response = await axios.post(`${TELEGRAM_API_URL}/sendMessage`, {
       chat_id: chatId,
       text: text,
-      parse_mode: 'Markdown' // Optional: Supports simple branding/formatting
+      // parse_mode: 'Markdown' // Disabled for debugging to avoid parse errors
     });
 
     console.log(`Message sent to ${chatId}: ${text.substring(0, 20)}...`);

@@ -14,12 +14,32 @@ const API_HASH = process.env.API_HASH;
 
 console.log('Loading Credentials:', { API_ID: API_ID_RAW, API_HASH });
 
+// --- TEMPORARY RAILWAY KILL-SWITCH ---
+// Ini biar Railway diem pas lo lagi login di laptop. 
+const IS_RAILWAY = process.env.RAILWAY_STATIC_URL || process.env.RAILWAY_ENVIRONMENT;
+
 if (!API_ID_RAW || !API_HASH) {
     console.error("FATAL: API_ID or API_HASH is missing in .env");
     process.exit(1);
 }
 
 const API_ID = parseInt(API_ID_RAW);
+
+// --- Process Monitoring ---
+process.on('uncaughtException', (err) => {
+    console.error('SERVER CRASHED (Uncaught Exception):', err);
+});
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+process.on('exit', (code) => {
+    console.log(`SERVER EXITING with code: ${code}`);
+});
+
+// --- Keep Alive ---
+setInterval(() => {
+    console.log(`[Status] Server is ALIVE. Time: ${new Date().toLocaleTimeString()}`);
+}, 30000);
 
 // In-Memory Storage
 // users[telegramId] = { 
@@ -53,7 +73,7 @@ if (fs.existsSync('session.txt')) {
     console.log("No saved session found (Checked session.txt and process.env.SESSION_STRING)");
 }
 
-if (savedSession) {
+if (savedSession && !IS_RAILWAY) {
     const session = new StringSession(savedSession);
     
     // Create Client
@@ -84,32 +104,46 @@ if (savedSession) {
 
 // 1. WEBHOOK (Chatbot Interface)
 app.post('/webhook', async (req, res) => {
+  // Acknowledge immediately to prevent timeouts/retries from Telegram
+  res.sendStatus(200);
+
+  if (IS_RAILWAY) {
+      console.log("⚠️ [RAILWAY Webhook] Ignored (Silence Mode active)");
+      return;
+  }
+
   try {
     const update = req.body;
     
     // Log incoming update for debugging
     if (update.message) {
-        console.log(`[Webhook] Incoming from ${update.message.chat.id}: "${update.message.text}"`);
+        console.log(`[Webhook] Update from ${update.message.chat.id} (${update.message.chat.first_name}): "${update.message.text}"`);
+    } else {
+        console.log(`[Webhook] Received non-message update:`, JSON.stringify(update).substring(0, 100));
     }
 
-    if (!update.message) return res.sendStatus(200);
+    if (!update.message) return;
 
     const chatId = update.message.chat.id;
     const text = update.message.text;
     const user = getUser(chatId);
 
-    console.log(`[Chatbot] ${chatId} (${user.state}): ${text}`);
+    console.log(`[Chatbot] Current State for ${chatId}: ${user.state}`);
 
     // --- STATE MACHINE ---
+    const cleanCmd = text.trim().toLowerCase();
 
     // 1. IDLE STATE
     if (user.state === 'IDLE') {
-        if (text === '/me') {
-            await telegramService.sendMessage(chatId, `🆔 **ID Telegram Lo:** \`${chatId}\`\n\nCoba cocokin sama ID Userbot di logs.`);
-        } else if (text === '/connect') {
+        // ALWAYS check /connect first
+        if (cleanCmd.startsWith('/connect')) {
+            console.log(`[Chatbot] ${chatId} triggered /connect`);
             user.state = 'WAIT_PHONE';
-            await telegramService.sendMessage(chatId, "🔌 **Connect Userbot**\n\nKirim nomor HP Telegram lo (pake kode negara, misal: +628123456789).");
-        } else if (text === '/afk') {
+            await telegramService.sendMessage(chatId, "🔌 **[LOCAL] Connect Userbot**\n\nKirim nomor HP Telegram lo (misal: +628123456789).");
+            console.log(`[Chatbot] ${chatId} /connect response sent.`);
+        } else if (cleanCmd.startsWith('/me')) {
+            await telegramService.sendMessage(chatId, `🆔 **[LOCAL] ID Telegram Lo:** \`${chatId}\``);
+        } else if (cleanCmd.startsWith('/afk')) {
             if (!user.client) {
                 // FALLBACK: If current user has no client, try to find ANY connected client (Single User Mode)
                 const connectedIds = Object.keys(users).filter(k => users[k].client);
@@ -117,13 +151,13 @@ app.post('/webhook', async (req, res) => {
                      // AUTO-SWITCH to the logged in user
                      const loggedInId = connectedIds[0];
                      users[loggedInId].isAfk = true;
-                     return telegramService.sendMessage(chatId, `🔇 **AFK Mode ON** (Untuk Akun: \`${loggedInId}\`).\n(Gue izinin lo kontrol akun ini sementara).`);
+                     return telegramService.sendMessage(chatId, `🔇 **[LOCAL] AFK Mode ON** (Akun: \`${loggedInId}\`).`);
                 }
-                return telegramService.sendMessage(chatId, "⚠️ Belum connect akun! Ketik /connect dulu.");
+                return telegramService.sendMessage(chatId, "⚠️ **[LOCAL]** Belum connect akun! Ketik /connect dulu.");
             }
             user.isAfk = true;
-            await telegramService.sendMessage(chatId, "🔇 **AFK Mode ON** (Userbot).\nGue bakal balesin Chat Pribadi lo.");
-        } else if (text === '/back') {
+            await telegramService.sendMessage(chatId, "🔇 **[LOCAL] AFK Mode ON**.");
+        } else if (cleanCmd.startsWith('/back')) {
             if (!user.client) {
                 // FALLBACK: Try to find ANY connected client
                 const connectedIds = Object.keys(users).filter(k => users[k].client);
@@ -131,15 +165,15 @@ app.post('/webhook', async (req, res) => {
                      const loggedInId = connectedIds[0];
                      users[loggedInId].isAfk = false;
                      if (users[loggedInId].interactedUsers) users[loggedInId].interactedUsers.clear();
-                     return telegramService.sendMessage(chatId, `🔊 **AFK Mode OFF** (Untuk Akun: \`${loggedInId}\`).`);
+                     return telegramService.sendMessage(chatId, `🔊 **[LOCAL] AFK Mode OFF** (Akun: \`${loggedInId}\`).`);
                 }
             }
             user.isAfk = false;
             // Clear memory
             if (user.interactedUsers) user.interactedUsers.clear();
-            await telegramService.sendMessage(chatId, "🔊 **AFK Mode OFF**.");
+            await telegramService.sendMessage(chatId, "🔊 **[LOCAL] AFK Mode OFF**.");
         } else {
-            await telegramService.sendMessage(chatId, "🤖 **Menu Bot**:\n/connect - Login Akun Telegram\n/afk - Nyalain Auto Reply\n/back - Matiin Auto Reply");
+            await telegramService.sendMessage(chatId, "🤖 **[LOCAL] Menu Bot**:\n/connect - Login\n/afk - ON\n/back - OFF");
         }
     } 
 
@@ -207,7 +241,7 @@ app.post('/webhook', async (req, res) => {
             user.state = 'IDLE'; 
             // Send Stack Trace to Telegram (Truncated to 1000 chars)
             const stackMsg = e.stack ? e.stack.substring(0, 1000) : e.message;
-            await telegramService.sendMessage(chatId, `❌ **CRITICAL ERROR**:\n\`\`\`\n${stackMsg}\n\`\`\`\nUlangi /connect.`);
+            await telegramService.sendMessage(chatId, `❌ **[LOCAL] CRITICAL ERROR**:\n\`\`\`\n${stackMsg}\n\`\`\`\nUlangi /connect.`);
         }
     }
 
@@ -251,7 +285,7 @@ app.post('/webhook', async (req, res) => {
                  // user.state = 'WAIT_PASSWORD'; // Not implemented yet
                  await telegramService.sendMessage(chatId, "❌ Akun lo pake 2FA (Password). Bot ini belum support 2FA bro. Matiin dulu 2FA-nya atau coba nanti.");
              } else {
-                 await telegramService.sendMessage(chatId, `❌ Login Gagal: ${e.message}`);
+                 await telegramService.sendMessage(chatId, `❌ **[LOCAL]** Login Gagal: ${e.message}`);
              }
              user.state = 'IDLE';
         }
@@ -277,11 +311,8 @@ app.post('/webhook', async (req, res) => {
             // await telegramService.sendMessage(chatId, "🤖 Akun Terhubung. Pake /afk atau /back.");
         }
     }
-
-    res.sendStatus(200);
   } catch (error) {
     console.error('Webhook Error:', error);
-    res.sendStatus(500);
   }
 });
 
