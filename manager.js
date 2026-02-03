@@ -47,8 +47,10 @@ if (fs.existsSync('session.txt')) {
     console.log("Loading saved session from session.txt...");
     savedSession = fs.readFileSync('session.txt', 'utf8');
 } else if (process.env.SESSION_STRING) {
-    console.log("Loading saved session from Environment Variable...");
+    console.log("Loading saved session from Environment Variable SESSION_STRING...");
     savedSession = process.env.SESSION_STRING;
+} else {
+    console.log("No saved session found (Checked session.txt and process.env.SESSION_STRING)");
 }
 
 if (savedSession) {
