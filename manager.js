@@ -115,7 +115,19 @@ app.post('/webhook', async (req, res) => {
             user.isAfk = true;
             await telegramService.sendMessage(chatId, "🔇 **AFK Mode ON** (Userbot).\nGue bakal balesin Chat Pribadi lo.");
         } else if (text === '/back') {
+            if (!user.client) {
+                // FALLBACK: Try to find ANY connected client
+                const connectedIds = Object.keys(users).filter(k => users[k].client);
+                if (connectedIds.length > 0) {
+                     const loggedInId = connectedIds[0];
+                     users[loggedInId].isAfk = false;
+                     if (users[loggedInId].interactedUsers) users[loggedInId].interactedUsers.clear();
+                     return telegramService.sendMessage(chatId, `🔊 **AFK Mode OFF** (Untuk Akun: \`${loggedInId}\`).`);
+                }
+            }
             user.isAfk = false;
+            // Clear memory
+            if (user.interactedUsers) user.interactedUsers.clear();
             await telegramService.sendMessage(chatId, "🔊 **AFK Mode OFF**.");
         } else {
             await telegramService.sendMessage(chatId, "🤖 **Menu Bot**:\n/connect - Login Akun Telegram\n/afk - Nyalain Auto Reply\n/back - Matiin Auto Reply");
@@ -244,6 +256,8 @@ app.post('/webhook', async (req, res) => {
             await telegramService.sendMessage(chatId, "🔇 **AFK Mode ON**.");
         } else if (text === '/back') {
             user.isAfk = false;
+            // Clear memory
+            if (user.interactedUsers) user.interactedUsers.clear();
             await telegramService.sendMessage(chatId, "🔊 **AFK Mode OFF**.");
         } else if (text === '/logout') {
             await user.client.disconnect();
@@ -273,14 +287,14 @@ function startUserbotListener(userObj, ownerChatId) {
     // For MVP, we attach it to the userObj so checking /back can clear it
     userObj.interactedUsers = interactedUsers;
 
-    // Listen for incoming messages on the USER'S account
+        // Listen for incoming messages on the USER'S account
     client.addEventHandler(async (event) => {
         const message = event.message;
         
-        // DEBUG LOG
-        if (event.isPrivate && !message.out) {
-             console.log("DEBUG: Private Msg Received:", message.text);
-             console.log("DEBUG: AFK Status:", userObj.isAfk);
+        // Ignore messages from the BOT itself to prevent loops
+        const senderId = String(message.senderId);
+        if (senderId === String(process.env.TELEGRAM_BOT_TOKEN.split(':')[0])) {
+            return;
         }
 
         if (!userObj.isAfk) return;
@@ -294,7 +308,24 @@ function startUserbotListener(userObj, ownerChatId) {
             
             console.log(`[Userbot] Chat from ${senderName}: ${incomingText}`);
 
-            // Generate AI Reply
+            // --- Keyword Auto-Reply ---
+            const cleanText = incomingText.trim().toLowerCase();
+            const KEYWORD_REPLIES = {
+                'p': 'Oi, kenapa?',
+                'pinjam dulu seratus': 'Gak ada duit bro',
+                'pagi': 'Pagi juga bos!',
+                'malam': 'Malam, ada apa nih?',
+                'dik': 'eitsss no no yh'
+            };
+
+            if (KEYWORD_REPLIES[cleanText]) {
+                const instantReply = KEYWORD_REPLIES[cleanText];
+                console.log(`[Userbot] Keyword Match: "${cleanText}" -> ${instantReply}`);
+                await client.sendMessage(sender.id, { message: instantReply });
+                return; // Gak usah panggil Gemini
+            }
+
+            // --- Gemini AI Fallback ---
             // Fetch owner name from userObj or client
             const ownerName = userObj.firstName || "Gue";
             

@@ -61,7 +61,11 @@ async function generateContent(userText, ownerName = "Bos", isFirstMessage = tru
     }
 
   } catch (error) {
-    console.error('Error calling Gemini API:', error.response ? error.response.data : error.message);
+    if (error.response) {
+        console.error('Error calling Gemini API (Response Data):', JSON.stringify(error.response.data, null, 2));
+    } else {
+        console.error('Error calling Gemini API (Message):', error.message);
+    }
     if (error.code === 'ECONNABORTED') {
         return "Sabar ya bro, lagi mikir keras nih... (Timeout)";
     }
