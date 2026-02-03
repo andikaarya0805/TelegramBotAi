@@ -65,19 +65,20 @@ if (savedSession) {
         console.log(`Logged in as: ${me.firstName} (${me.id})`);
         
         // Store in memory mapping
-        // We use the ID from 'me.id' to map it correctly
         users[me.id] = {
             state: 'CONNECTED',
             client: autoClient,
-            firstName: me.firstName, // Store name for AI Persona
+            firstName: me.firstName,
             phone: me.phone,
             isAfk: false
         };
         
-        // Start Listener
         startUserbotListener(users[me.id], me.id);
     }).catch(e => {
-        console.error("Auto-Login Failed:", e);
+        console.error("AUTO-LOGIN CRITICAL ERROR:", e.message);
+        if (e.message.includes('AUTH_KEY_DUPLICATED')) {
+            console.error("DANGER: Session is being used elsewhere (maybe local bot still running or session revoked).");
+        }
     });
 }
 
@@ -85,6 +86,12 @@ if (savedSession) {
 app.post('/webhook', async (req, res) => {
   try {
     const update = req.body;
+    
+    // Log incoming update for debugging
+    if (update.message) {
+        console.log(`[Webhook] Incoming from ${update.message.chat.id}: "${update.message.text}"`);
+    }
+
     if (!update.message) return res.sendStatus(200);
 
     const chatId = update.message.chat.id;
