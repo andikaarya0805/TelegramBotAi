@@ -67,7 +67,7 @@ async function generateContent(userText, ownerName = "Bos", isFirstMessage = tru
     if (error.code === 'ECONNABORTED') {
       return "Sabar ya bro, lagi mikir keras nih... (Timeout)";
     }
-    return "Ada masalah teknis nih bro. Coba lagi ya.";
+    return "Ada masalah teknis nih kontol, sorry spam";
   }
 }
 
