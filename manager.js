@@ -163,28 +163,14 @@ app.post('/webhook', async (req, res) => {
             await telegramService.sendMessage(chatId, `🆔 **[LOCAL] ID Telegram Lo:** \`${chatId}\``);
         } else if (cleanCmd.startsWith('/afk')) {
             if (!user.client) {
-                // FALLBACK: If current user has no client, try to find ANY connected client (Single User Mode)
-                const connectedIds = Object.keys(users).filter(k => users[k].client);
-                if (connectedIds.length > 0) {
-                     // AUTO-SWITCH to the logged in user
-                     const loggedInId = connectedIds[0];
-                     users[loggedInId].isAfk = true;
-                     return telegramService.sendMessage(chatId, `🔇 **[LOCAL] AFK Mode ON** (Akun: \`${loggedInId}\`).`);
-                }
+                return telegramService.sendMessage(chatId, "⚠️ **[LOCAL]** Belum connect akun! Ketik /connect dulu.");
                 return telegramService.sendMessage(chatId, "⚠️ **[LOCAL]** Belum connect akun! Ketik /connect dulu.");
             }
             user.isAfk = true;
             await telegramService.sendMessage(chatId, "🔇 **[LOCAL] AFK Mode ON**.");
         } else if (cleanCmd.startsWith('/back')) {
             if (!user.client) {
-                // FALLBACK: Try to find ANY connected client
-                const connectedIds = Object.keys(users).filter(k => users[k].client);
-                if (connectedIds.length > 0) {
-                     const loggedInId = connectedIds[0];
-                     users[loggedInId].isAfk = false;
-                     if (users[loggedInId].interactedUsers) users[loggedInId].interactedUsers.clear();
-                     return telegramService.sendMessage(chatId, `🔊 **[LOCAL] AFK Mode OFF** (Akun: \`${loggedInId}\`).`);
-                }
+                return telegramService.sendMessage(chatId, "⚠️ **[LOCAL]** Belum connect akun! Ketik /connect dulu.");
             }
             user.isAfk = false;
             // Clear memory
