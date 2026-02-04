@@ -65,18 +65,21 @@ async function generateContent(userText, ownerName = "Bos", isFirstMessage = tru
 
   } catch (error) {
     if (error.response) {
-      console.error('Error calling OpenRouter API (Response Data):', JSON.stringify(error.response.data, null, 2));
+      const errMsg = JSON.stringify(error.response.data || {});
+      console.error('Error calling OpenRouter API (Response Data):', errMsg);
       // Handle rate limits or specific errors
       if (error.response.status === 429) {
-          return "Waduh, lagi rame banget nih yang make. Bentar ya, antri dulu.";
+          return "Lagi sibuk banget servernya (Rate Limit 429). Tunggu bentar.";
       }
+      return `Error API: ${error.response.status} - ${errMsg.substring(0, 100)}...`;
     } else {
       console.error('Error calling OpenRouter API (Message):', error.message);
+      return `Error System: ${error.message}`;
     }
-    if (error.code === 'ECONNABORTED') {
-      return "Sabar ya bro, lagi mikir keras nih... (Timeout)";
-    }
-    return "Ada masalah teknis nih bro. Coba lagi ya.";
+    // if (error.code === 'ECONNABORTED') {
+    //   return "Sabar ya bro, lagi mikir keras nih... (Timeout)";
+    // }
+    // return "Ada masalah teknis nih kontol, sorry spam";
   }
 }
 
