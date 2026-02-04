@@ -86,8 +86,10 @@ if (savedSession) {
         const me = await autoClient.getMe();
         console.log(`Logged in as: ${me.firstName} (${me.id})`);
         
-        // Store in memory mapping
-        users[me.id] = {
+        // Store in memory mapping (Normalizing ID to String)
+        const userIdStr = String(me.id);
+        
+        users[userIdStr] = {
             state: 'CONNECTED',
             client: autoClient,
             firstName: me.firstName,
@@ -95,7 +97,8 @@ if (savedSession) {
             isAfk: false
         };
         
-        startUserbotListener(users[me.id], me.id);
+        console.log(`[System] Registered User ID: ${userIdStr}`);
+        startUserbotListener(users[userIdStr], userIdStr);
     }).catch(e => {
         console.error("AUTO-LOGIN CRITICAL ERROR:", e.message);
         if (e.message.includes('AUTH_KEY_DUPLICATED')) {
@@ -134,8 +137,8 @@ app.post('/webhook', async (req, res) => {
 
     if (!update.message) return;
 
-    const chatId = update.message.chat.id;
     const text = update.message.text;
+    const chatId = String(update.message.chat.id); // Normalize to String
     const user = getUser(chatId);
 
     console.log(`[Chatbot] Update: "${text}" | State: ${user.state} | Processing: ${user.processing}`);
