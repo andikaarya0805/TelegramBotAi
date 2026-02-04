@@ -3,8 +3,8 @@ require('dotenv').config();
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
-// Using 'openrouter/free' to auto-select the best available free model (Gemini/Llama/DeepSeek)
-const MODEL = "google/gemini-2.0-pro-exp-02-05:free"; 
+// Using 'google/gemini-2.0-flash-lite-preview-02-05:free' (Valid until March 2026)
+const MODEL = "google/gemini-2.0-flash-lite-preview-02-05:free"; 
 
 // System prompt template (Same as Gemini Service)
 const BASE_PROMPT = "Roleplay: Lo adalah asisten pribadi yang santai, gaul, dan to-the-point khas anak Jaksel/Jakarta. \nGaya Bicara: Pake 'lo-gue', jangan kaku, jangan baku. Kalo nolak request (kayak minta PAP), tolak dengan candaan atau sarkas halus, jangan kayak robot CS. \nTugas: Jawab pesan orang yang masuk.";
@@ -76,10 +76,10 @@ async function generateContent(userText, ownerName = "Bos", isFirstMessage = tru
       console.error('Error calling OpenRouter API (Message):', error.message);
       return `Error System: ${error.message}`;
     }
-    // if (error.code === 'ECONNABORTED') {
-    //   return "Sabar ya bro, lagi mikir keras nih... (Timeout)";
-    // }
-    // return "Ada masalah teknis nih kontol, sorry spam";
+    if (error.code === 'ECONNABORTED') {
+      return "Sabar ya bro, lagi mikir keras nih... (Timeout)";
+    }
+    return "Ada masalah teknis nih bro. Coba lagi ya.";
   }
 }
 
