@@ -14,9 +14,7 @@ const API_HASH = process.env.API_HASH;
 
 console.log('Loading Credentials:', { API_ID: API_ID_RAW, API_HASH });
 
-// --- TEMPORARY RAILWAY KILL-SWITCH ---
-// Ini biar Railway diem pas lo lagi login di laptop. 
-const IS_RAILWAY = process.env.RAILWAY_STATIC_URL || process.env.RAILWAY_ENVIRONMENT;
+console.log('Loading Credentials:', { API_ID: API_ID_RAW, API_HASH });
 
 if (!API_ID_RAW || !API_HASH) {
     console.error("FATAL: API_ID or API_HASH is missing in .env");
@@ -37,8 +35,11 @@ process.on('exit', (code) => {
 });
 
 // --- Keep Alive ---
+const INSTANCE_ID = Math.random().toString(36).substring(7).toUpperCase();
+console.log(`[System] Initializing Instance: ${INSTANCE_ID}`);
+
 setInterval(() => {
-    console.log(`[Status] Server is ALIVE. Time: ${new Date().toLocaleTimeString()}`);
+    console.log(`[Status][${INSTANCE_ID}] Server is ALIVE. Time: ${new Date().toLocaleTimeString()}`);
 }, 30000);
 
 // In-Memory Storage
@@ -50,12 +51,13 @@ setInterval(() => {
 //   isAfk: false
 // }
 const users = {};
+const processedUpdates = new Set(); // Deduplication for Telegram Retries
 
 app.use(bodyParser.json());
 
 // Helper: Get or Init User
 const getUser = (id) => {
-  if (!users[id]) users[id] = { state: 'IDLE', isAfk: false };
+  if (!users[id]) users[id] = { state: 'IDLE', isAfk: false, processing: false };
   return users[id];
 };
 
@@ -73,7 +75,7 @@ if (fs.existsSync('session.txt')) {
     console.log("No saved session found (Checked session.txt and process.env.SESSION_STRING)");
 }
 
-if (savedSession && !IS_RAILWAY) {
+if (savedSession) {
     const session = new StringSession(savedSession);
     
     // Create Client
@@ -107,14 +109,22 @@ app.post('/webhook', async (req, res) => {
   // Acknowledge immediately to prevent timeouts/retries from Telegram
   res.sendStatus(200);
 
-  if (IS_RAILWAY) {
-      console.log("⚠️ [RAILWAY Webhook] Ignored (Silence Mode active)");
-      return;
-  }
-
   try {
     const update = req.body;
     
+    // Deduplication check
+    if (update.update_id) {
+        if (processedUpdates.has(update.update_id)) {
+            console.log(`[Webhook] Duplicate update_id ${update.update_id} ignored.`);
+            return;
+        }
+        processedUpdates.add(update.update_id);
+        // Keep set small (last 100 IDs)
+        if (processedUpdates.size > 100) {
+            const first = processedUpdates.values().next().value;
+            processedUpdates.delete(first);
+        }
+    }
     // Log incoming update for debugging
     if (update.message) {
         console.log(`[Webhook] Update from ${update.message.chat.id} (${update.message.chat.first_name}): "${update.message.text}"`);
@@ -128,7 +138,12 @@ app.post('/webhook', async (req, res) => {
     const text = update.message.text;
     const user = getUser(chatId);
 
-    console.log(`[Chatbot] Current State for ${chatId}: ${user.state}`);
+    console.log(`[Chatbot] Update: "${text}" | State: ${user.state} | Processing: ${user.processing}`);
+
+    if (user.processing) {
+        console.log(`[Chatbot] User ${chatId} is currently processing another request. Ignored.`);
+        return;
+    }
 
     // --- STATE MACHINE ---
     const cleanCmd = text.trim().toLowerCase();
@@ -179,44 +194,40 @@ app.post('/webhook', async (req, res) => {
 
     // 2. WAIT PHONE
     else if (user.state === 'WAIT_PHONE') {
+        // Prevent "/connect" or other commands from being read as phone number
+        if (text.startsWith('/')) {
+            console.log(`[Chatbot] Command "${text}" received in WAIT_PHONE. Resetting to IDLE.`);
+            user.state = 'IDLE';
+            // Let the recursion/next loop handle it as a command if needed, or just ask user to retry
+            return telegramService.sendMessage(chatId, "⚠️ **[LOCAL]** Mode Login dibatalkan. Ketik `/connect` lagi kalau mau mulai.");
+        }
+
+        user.processing = true;
         user.phone = text.replace(/\s/g, '');
-        await telegramService.sendMessage(chatId, `⏳ Mengirim kode OTP ke ${user.phone}...`);
+        await telegramService.sendMessage(chatId, `⏳ **[LOCAL]** Mengirim kode OTP ke ${user.phone}...`);
         
         try {
-            console.log("DEBUG: Initializing Client...");
-            console.log("DEBUG: API_ID:", API_ID, typeof API_ID);
-            console.log("DEBUG: API_HASH:", API_HASH, typeof API_HASH);
-            console.log("DEBUG: StringSession:", StringSession);
+            console.log(`[System][${INSTANCE_ID}] Initializing Client for ${user.phone}...`);
+            
+            // CLEANUP: Disconnect existing client if any
+            if (user.client) {
+                console.log(`[System][${INSTANCE_ID}] Disconnecting stale client...`);
+                try { await user.client.disconnect(); } catch (e) { /* ignore */ }
+                user.client = null;
+            }
 
-            // Init GramJS Client
             const session = new StringSession("");
-            console.log("DEBUG: Session Created:", session);
 
-            // FORCE non-interactive mode using 'useWSS: false' (default) and avoiding 'input' package usage by library
             user.client = new TelegramClient(session, API_ID, API_HASH, { 
                 connectionRetries: 5,
                 useWSS: false 
             });
             
-            // Overwrite the internal 'input' handler of the client to throw error instead of waiting for stdin
-            // user.client._input = () => { throw new Error("STDIN_DISABLED"); };
-
-            console.log("DEBUG: Client Created");
-            
+            console.log(`[System][${INSTANCE_ID}] Connecting client...`);
             await user.client.connect();
-            console.log("DEBUG: Client Connected");
+            console.log(`[System][${INSTANCE_ID}] Client Connected.`);
             
-            await user.client.connect();
-            console.log("DEBUG: Client Connected");
-            
-            console.log("DEBUG: Invoking auth.SendCode directly...");
-            console.log("Params:", {
-                phoneNumber: user.phone,
-                apiId: API_ID,
-                apiHash: API_HASH
-            });
-
-            // Use Direct Invoke to avoid helper issues
+            console.log(`[System][${INSTANCE_ID}] Sending Code to ${user.phone}...`);
             const result = await user.client.invoke(
                 new Api.auth.SendCode({
                     phoneNumber: String(user.phone),
@@ -230,35 +241,45 @@ app.post('/webhook', async (req, res) => {
                 })
             );
             
-            console.log("DEBUG: Code Sent via Invoke. Result:", result);
             const phoneCodeHash = result.phoneCodeHash;
-            
+            console.log(`[System][${INSTANCE_ID}] Code Sent. Hash: ${phoneCodeHash}`);
             user.phoneCodeHash = phoneCodeHash;
             user.state = 'WAIT_CODE';
-            await telegramService.sendMessage(chatId, "✅ Kode dikirim ke Telegram lo (BUKAN SMS).\n\nKetik kodenya di sini bro:");
+            await telegramService.sendMessage(chatId, "✅ **[LOCAL]** Kode dikirim ke Telegram lo.\n\nKetik kodenya di sini bro:");
         } catch (e) {
-            console.error("CRITICAL ERROR:", e);
+            console.error(`[System][${INSTANCE_ID}] SEND_CODE ERROR:`, e);
             user.state = 'IDLE'; 
-            // Send Stack Trace to Telegram (Truncated to 1000 chars)
             const stackMsg = e.stack ? e.stack.substring(0, 1000) : e.message;
-            await telegramService.sendMessage(chatId, `❌ **[LOCAL] CRITICAL ERROR**:\n\`\`\`\n${stackMsg}\n\`\`\`\nUlangi /connect.`);
+            await telegramService.sendMessage(chatId, `❌ **[LOCAL] ERROR**:\n\`\`\`\n${stackMsg}\n\`\`\`\nUlangi /connect.`);
+        } finally {
+            user.processing = false;
         }
     }
 
     // 3. WAIT CODE
     else if (user.state === 'WAIT_CODE') {
-        if (!user.client) {
-            user.state = 'IDLE';
-            return telegramService.sendMessage(chatId, "❌ Session expired. Ulangi /connect.");
+        // Prevent commands from being read as OTP code
+        if (text.startsWith('/')) {
+             console.log(`[Chatbot] Command "${text}" received in WAIT_CODE. Resetting to IDLE.`);
+             user.state = 'IDLE';
+             if (user.client) {
+                try { await user.client.disconnect(); } catch (e) {}
+                user.client = null;
+             }
+             return telegramService.sendMessage(chatId, "⚠️ **[LOCAL]** Login dibatalkan. Ketik `/connect` lagi buat ulang.");
         }
 
+        user.processing = true;
+        if (!user.client) {
+            user.state = 'IDLE';
+            user.processing = false;
+            return telegramService.sendMessage(chatId, "❌ Session expired. Ulangi /connect.");
+        }
+ 
         try {
-           console.log("DEBUG: Signing in...");
-           console.log("DEBUG: Stored Hash:", user.phoneCodeHash);
            const cleanCode = String(text).trim();
-           console.log("DEBUG: Input Code:", cleanCode);
+           console.log(`[System][${INSTANCE_ID}] Signing in for ${user.phone} with code ${cleanCode}...`);
            
-           // Use Direct Invoke for SignIn
            const result = await user.client.invoke(
                 new Api.auth.SignIn({
                     phoneNumber: String(user.phone),
@@ -266,28 +287,23 @@ app.post('/webhook', async (req, res) => {
                     phoneCode: cleanCode
                 })
             );
-            console.log("DEBUG: SignIn Result:", result);
+            console.log(`[System][${INSTANCE_ID}] SignIn Success!`);
             
-            // Save Session (In Memory)
-            // Since we used 'invoke', the client internal session might not be fully updated immediately 
-            // but stringSession should catch the auth key update.
             const session = user.client.session.save();
             user.state = 'CONNECTED';
             
-            // Start Listener for Userbot
             startUserbotListener(user, chatId);
-
-            await telegramService.sendMessage(chatId, "🎉 **Login Sukses!**\nSekarang lo bisa ketik `/afk` buat nyalain AI.");
+            await telegramService.sendMessage(chatId, "🎉 **[LOCAL] Login Sukses!**\nSekarang AI Userbot lo udah aktif.\n\nKetik `/afk` buat mulai auto-reply.");
         } catch (e) {
-             console.error(e);
-             /* If 2FA is needed, e.message usually contains 'PASSWORD_REQUIRED' */
+             console.error(`[System][${INSTANCE_ID}] SIGN_IN ERROR:`, e);
              if (e.success === false && e.message === 'SESSION_PASSWORD_NEEDED') {
-                 // user.state = 'WAIT_PASSWORD'; // Not implemented yet
-                 await telegramService.sendMessage(chatId, "❌ Akun lo pake 2FA (Password). Bot ini belum support 2FA bro. Matiin dulu 2FA-nya atau coba nanti.");
+                 await telegramService.sendMessage(chatId, "❌ Akun lo pake 2FA. Matikan dulu 2FA-nya bro.");
              } else {
                  await telegramService.sendMessage(chatId, `❌ **[LOCAL]** Login Gagal: ${e.message}`);
              }
              user.state = 'IDLE';
+        } finally {
+            user.processing = false;
         }
     }
     
