@@ -4,7 +4,8 @@ const { TelegramClient, Api } = require('telegram');
 const { StringSession } = require('telegram/sessions');
 const { NewMessage } = require('telegram/events');
 const telegramService = require('./services/telegramService');
-const geminiService = require('./services/geminiService');
+// const geminiService = require('./services/geminiService');
+const aiService = require('./services/openRouterService'); // Switched to OpenRouter
 require('dotenv').config();
 
 const app = express();
@@ -409,7 +410,7 @@ function startUserbotListener(userObj, ownerChatId) {
             const isFirstMessage = !userObj.interactedUsers.has(sender.id);
             
             try {
-                const reply = await geminiService.generateContent(incomingText, ownerName, isFirstMessage);
+                const reply = await aiService.generateContent(incomingText, ownerName, isFirstMessage);
                 
                 // Mark as interacted
                 if (isFirstMessage) {
