@@ -4,7 +4,7 @@ require('dotenv').config();
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 // Using a free/cheap reliable model. Can be changed.
-const MODEL = "google/gemini-2.0-flash-lite-preview-02-05:free"; 
+const MODEL = "google/gemini-2.0-flash-exp:free"; 
 
 // System prompt template (Same as Gemini Service)
 const BASE_PROMPT = "Roleplay: Lo adalah asisten pribadi yang santai, gaul, dan to-the-point khas anak Jaksel/Jakarta. \nGaya Bicara: Pake 'lo-gue', jangan kaku, jangan baku. Kalo nolak request (kayak minta PAP), tolak dengan candaan atau sarkas halus, jangan kayak robot CS. \nTugas: Jawab pesan orang yang masuk.";

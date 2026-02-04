@@ -375,8 +375,9 @@ function startUserbotListener(userObj, ownerChatId) {
             const sender = await message.getSender();
             
             // Security: Ignore other bots to prevent infinite loops or spam replies
-            if (sender.bot) {
-                console.log(`[Userbot] Ignored message from bot: ${sender.firstName}`);
+            // Check 'bot' flag AND username ending with 'bot' (common convention)
+            if (sender.bot || (sender.username && sender.username.toLowerCase().endsWith('bot'))) {
+                console.log(`[Userbot] Ignored message from bot/service: ${sender.firstName} (@${sender.username})`);
                 return;
             }
 
