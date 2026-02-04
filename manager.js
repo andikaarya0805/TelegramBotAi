@@ -372,6 +372,13 @@ function startUserbotListener(userObj, ownerChatId) {
             cooldowns.set(senderId, now);
 
             const sender = await message.getSender();
+            
+            // Security: Ignore other bots to prevent infinite loops or spam replies
+            if (sender.bot) {
+                console.log(`[Userbot] Ignored message from bot: ${sender.firstName}`);
+                return;
+            }
+
             const senderName = sender.firstName || "Bro";
             const incomingText = message.text;
             
