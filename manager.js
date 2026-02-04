@@ -352,8 +352,8 @@ function startUserbotListener(userObj, ownerChatId) {
         const message = event.message;
         const now = Date.now();
         
-        // Log all incoming messages for debugging Cloud issues
-        console.log(`[Userbot] Received event. Message: "${message.message?.substring(0, 20)}..." | AFK: ${userObj.isAfk} | Out: ${message.out}`);
+        
+        // Log removed to reduce spam: Only logging processed messages below
 
         // Ignore messages from the BOT itself to prevent loops
         const senderId = String(message.senderId);
