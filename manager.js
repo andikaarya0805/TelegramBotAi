@@ -25,8 +25,6 @@ if (WEBHOOK_URL) {
 
 console.log('Loading Credentials:', { API_ID: API_ID_RAW, API_HASH });
 
-console.log('Loading Credentials:', { API_ID: API_ID_RAW, API_HASH });
-
 if (!API_ID_RAW || !API_HASH) {
     console.error("FATAL: API_ID or API_HASH is missing in .env");
     process.exit(1);
