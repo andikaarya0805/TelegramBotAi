@@ -122,6 +122,10 @@ if (DB_URL && DB_KEY) {
     console.log("⚠️ [System] Supabase not configured. Auto-login skipped.");
 }
 
+// --- HEALTH CHECKS ---
+app.get('/', (req, res) => res.send('SaaS Manager is Online!'));
+app.get('/health', (req, res) => res.json({ status: 'alive', sessions: Object.keys(users).length }));
+
 // 1. WEBHOOK (Chatbot Interface)
 app.post('/webhook', async (req, res) => {
   // Acknowledge immediately to prevent timeouts/retries from Telegram
