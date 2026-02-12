@@ -9,7 +9,7 @@ const aiService = require('./services/openRouterService'); // Switched to OpenRo
 require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 8000;
+const PORT = process.env.PORT || 3001;
 const API_ID_RAW = process.env.API_ID;
 const API_HASH = process.env.API_HASH;
 const WEBHOOK_URL = process.env.WEBHOOK_URL;
