@@ -70,50 +70,56 @@ const getUser = (id) => {
   return users[id];
 };
 
-// AUTO-LOGIN ON STARTUP
-const fs = require('fs');
-let savedSession = null;
+// AUTO-LOGIN ON STARTUP (FETCH FROM SUPABASE)
+const { createClient } = require('@supabase/supabase-js');
+const DB_URL = process.env.DB_URL;
+const DB_KEY = process.env.DB_KEY;
 
-if (fs.existsSync('session.txt')) {
-    console.log("Loading saved session from session.txt...");
-    savedSession = fs.readFileSync('session.txt', 'utf8');
-} else if (process.env.SESSION_STRING) {
-    console.log("Loading saved session from Environment Variable SESSION_STRING...");
-    savedSession = process.env.SESSION_STRING;
-} else {
-    console.log("No saved session found (Checked session.txt and process.env.SESSION_STRING)");
-}
-
-if (savedSession) {
-    const session = new StringSession(savedSession);
+if (DB_URL && DB_KEY) {
+    const supabase = createClient(DB_URL, DB_KEY);
     
-    // Create Client
-    const autoClient = new TelegramClient(session, API_ID, API_HASH, { connectionRetries: 5, useWSS: false });
-    
-    autoClient.connect().then(async () => {
-        console.log("AUTO-LOGIN SUCCESS!");
-        const me = await autoClient.getMe();
-        console.log(`Logged in as: ${me.firstName} (${me.id})`);
+    (async () => {
+        console.log("[System] Fetching sessions from Supabase...");
+        const { data, error } = await supabase.from('user_sessions').select('*');
         
-        // Store in memory mapping (Normalizing ID to String)
-        const userIdStr = String(me.id);
-        
-        users[userIdStr] = {
-            state: 'CONNECTED',
-            client: autoClient,
-            firstName: me.firstName,
-            phone: me.phone,
-            isAfk: false
-        };
-        
-        console.log(`[System] Registered User ID: ${userIdStr}`);
-        startUserbotListener(users[userIdStr], userIdStr);
-    }).catch(e => {
-        console.error("AUTO-LOGIN CRITICAL ERROR:", e.message);
-        if (e.message.includes('AUTH_KEY_DUPLICATED')) {
-            console.error("DANGER: Session is being used elsewhere (maybe local bot still running or session revoked).");
+        if (error) {
+            console.error("[System] Supabase Fetch Error:", error.message);
+            return;
         }
-    });
+
+        console.log(`[System] Found ${data.length} sessions to initialize.`);
+        
+        for (const row of data) {
+            if (!row.session_string) continue;
+            
+            console.log(`[System] Initializing session for: ${row.first_name || row.chat_id}`);
+            const session = new StringSession(row.session_string);
+            const client = new TelegramClient(session, API_ID, API_HASH, { 
+                connectionRetries: 5, 
+                useWSS: false 
+            });
+
+            client.connect().then(async () => {
+                const me = await client.getMe();
+                const userIdStr = String(me.id);
+                
+                users[userIdStr] = {
+                    state: 'CONNECTED',
+                    client: client,
+                    firstName: me.firstName,
+                    phone: me.phone,
+                    isAfk: row.is_afk || false
+                };
+                
+                console.log(`✅ [System] ${me.firstName} is ONLINE.`);
+                startUserbotListener(users[userIdStr], userIdStr);
+            }).catch(e => {
+                console.error(`❌ [System] Failed to connect ${row.first_name || row.chat_id}:`, e.message);
+            });
+        }
+    })();
+} else {
+    console.log("⚠️ [System] Supabase not configured. Auto-login skipped.");
 }
 
 // 1. WEBHOOK (Chatbot Interface)
