@@ -111,15 +111,50 @@ if (DB_URL && DB_KEY) {
                     isAfk: row.is_afk || false
                 };
                 
-                console.log(`✅ [System] ${me.firstName} is ONLINE.`);
+                console.log(`✅ [System] Session Activated: ${me.firstName} (${userIdStr})`);
                 startUserbotListener(users[userIdStr], userIdStr);
             }).catch(e => {
                 console.error(`❌ [System] Failed to connect ${row.first_name || row.chat_id}:`, e.message);
+                if (e.message.includes('406')) {
+                   console.error("   └─ Hint: This session is already active elsewhere (Duplicate).");
+                }
             });
         }
     })();
 } else {
     console.log("⚠️ [System] Supabase not configured. Auto-login skipped.");
+}
+
+async function syncSessionsFromDB() {
+    if (!DB_URL || !DB_KEY) return "DB not configured";
+    const supabase = createClient(DB_URL, DB_KEY);
+    const { data, error } = await supabase.from('user_sessions').select('*');
+    if (error) return `Error: ${error.message}`;
+    
+    let count = 0;
+    for (const row of data) {
+        const userIdStr = String(row.chat_id);
+        if (users[userIdStr] && users[userIdStr].state === 'CONNECTED') continue;
+        
+        if (row.session_string) {
+            console.log(`[Sync] Activating new session: ${row.first_name}`);
+            const session = new StringSession(row.session_string);
+            const client = new TelegramClient(session, API_ID, API_HASH, { connectionRetries: 3 });
+            try {
+                await client.connect();
+                const me = await client.getMe();
+                users[String(me.id)] = {
+                    state: 'CONNECTED',
+                    client: client,
+                    firstName: me.firstName,
+                    isAfk: row.is_afk || false
+                };
+                startUserbotListener(users[String(me.id)], String(me.id));
+                count++;
+            } catch (e) { console.error(`[Sync] Failed ${row.first_name}:`, e.message); }
+        }
+    }
+    return `Synced ${count} new sessions. Total active: ${Object.keys(users).length}`;
 }
 
 // --- HEALTH CHECKS ---
@@ -195,8 +230,12 @@ app.post('/webhook', async (req, res) => {
             // Clear memory
             if (user.interactedUsers) user.interactedUsers.clear();
             await telegramService.sendMessage(chatId, "🔊 **[LOCAL] AFK Mode OFF**.");
+        } else if (cleanCmd.startsWith('/sync')) {
+            await telegramService.sendMessage(chatId, "⏳ **[LOCAL]** Menyingkronkan sesi dari database Supabase...");
+            const res = await syncSessionsFromDB();
+            await telegramService.sendMessage(chatId, `✅ **[LOCAL] Sync Selesai**:\n${res}`);
         } else {
-            await telegramService.sendMessage(chatId, "🤖 **[LOCAL] Menu Bot**:\n/connect - Login\n/afk - ON\n/back - OFF");
+            await telegramService.sendMessage(chatId, "🤖 **[LOCAL] Menu Bot**:\n/connect - Login\n/sync - Sync Database\n/afk - ON\n/back - OFF");
         }
     } 
 
