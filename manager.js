@@ -16,11 +16,14 @@ const WEBHOOK_URL = process.env.WEBHOOK_URL;
 
 // Auto-Set Webhook if URL is provided
 if (WEBHOOK_URL) {
+    console.log(`[Webhook] Target URL detected: ${WEBHOOK_URL}`);
     telegramService.setWebhook(WEBHOOK_URL).then(res => {
         console.log("[Webhook] Set Successful:", res);
     }).catch(e => {
         console.error("[Webhook] Set Failed:", e.message);
     });
+} else {
+    console.log("⚠️ [Webhook] WEBHOOK_URL is missing! Bot won't receive messages.");
 }
 
 console.log('Loading Credentials:', { API_ID: API_ID_RAW, API_HASH });
