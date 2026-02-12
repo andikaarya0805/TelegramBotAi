@@ -21,4 +21,17 @@ async function sendMessage(chatId, text) {
   }
 }
 
-module.exports = { sendMessage };
+async function setWebhook(url) {
+  try {
+    const response = await axios.post(`${TELEGRAM_API_URL}/setWebhook`, {
+      url: `${url}/webhook`
+    });
+    console.log(`Webhook set to: ${url}/webhook`);
+    return response.data;
+  } catch (error) {
+    console.error('Error setting webhook:', error.response ? error.response.data : error.message);
+    throw error;
+  }
+}
+
+module.exports = { sendMessage, setWebhook };

@@ -9,9 +9,19 @@ const aiService = require('./services/openRouterService'); // Switched to OpenRo
 require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 8000;
 const API_ID_RAW = process.env.API_ID;
 const API_HASH = process.env.API_HASH;
+const WEBHOOK_URL = process.env.WEBHOOK_URL;
+
+// Auto-Set Webhook if URL is provided
+if (WEBHOOK_URL) {
+    telegramService.setWebhook(WEBHOOK_URL).then(res => {
+        console.log("[Webhook] Set Successful:", res);
+    }).catch(e => {
+        console.error("[Webhook] Set Failed:", e.message);
+    });
+}
 
 console.log('Loading Credentials:', { API_ID: API_ID_RAW, API_HASH });
 
