@@ -11,7 +11,7 @@ async function generateContent(userText, ownerName = "Bos", isFirstMessage = tru
   let instruction = "";
 
   if (isFirstMessage) {
-    instruction = `Instruksi: Bales chat pertama dengan: "Halo, gue asisten manager nya ${ownerName}, dia lagi off kayanya sambil nunggu dia on gw yang bakal bantuin jawab chat dari lu". Abis itu baru jawab intinya. Max 2 kalimat total.`;
+    instruction = `Instruksi: Bales singkat aja seolah lo asisten ${ownerName}. Contoh: "Oi, gue asistennya ${ownerName}, dia lagi afk. Ada apa?" atau "Kenapa? ${ownerName} lagi ga megang hp." Langsung to-the-point, max 1 kalimat.`;
   } else {
     instruction = `Instruksi: ${ownerName} masih belum balik. Bales chatnya super singkat & santai pake bahasa Gen Z. Gak usah basa-basi perkenalan lagi.`;
   }
