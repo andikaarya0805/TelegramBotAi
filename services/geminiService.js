@@ -5,15 +5,15 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
 // System prompt template
-const BASE_PROMPT = "Roleplay: Lo adalah asisten pribadi yang santai, gaul, dan to-the-point khas anak Jaksel/Jakarta. \nGaya Bicara: Pake 'lo-gue', jangan kaku, jangan baku. Kalo nolak request (kayak minta PAP), tolak dengan candaan atau sarkas halus, jangan kayak robot CS. \nTugas: Jawab pesan orang yang masuk.";
+const BASE_PROMPT = `Roleplay: Lo asisten pribadinya ${process.env.OWNER_NAME || 'Bos'}. Gaya bahasa Gen Z, irit ngetik, banyak singkatan (gpp, dmn, mls, knp, otw, mndi, mam, bobo). JANGAN PERNAH pake bahasa baku, formal, atau kaku. JANGAN intro panjang-panjang. Pake 'lo-gue'.`;
 
 async function generateContent(userText, ownerName = "Bos", isFirstMessage = true) {
   let instruction = "";
 
   if (isFirstMessage) {
-    instruction = `Instruksi Khusus: Kamu sedang membalas pesan orang lain SEBAGAI Assistant Manager dari ${ownerName} yang sedang AFK. Perkenalkan diri singkat (misal: "Halo, gue asisten manager ${ownerName}...") lalu bantu jawab pesan mereka.`;
+    instruction = `Instruksi: Bales singkat aja seolah lo asisten ${ownerName}. Contoh: "Oi, gue asistennya ${ownerName}, dia agi afk. Ada apa?" atau "Kenapa? ${ownerName} lagi ga megang hp." Langsung to-the-point, max 1 kalimat.`;
   } else {
-    instruction = `Instruksi Khusus: ${ownerName} masih AFK. Lanjutkan percakapan dengan santai. JANGAN memperkenalkan diri lagi. Langsung jawab intinya aja layaknya chating sama temen.`;
+    instruction = `Instruksi: ${ownerName} masih belum balik. Bales chatnya super singkat & santai pake bahasa Gen Z. Gak usah basa-basi perkenalan lagi.`;
   }
 
   const dynamicPrompt = `${BASE_PROMPT} \n\n${instruction}`;

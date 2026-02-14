@@ -4,8 +4,9 @@ const { TelegramClient, Api } = require('telegram');
 const { StringSession } = require('telegram/sessions');
 const { NewMessage } = require('telegram/events');
 const telegramService = require('./services/telegramService');
-// const geminiService = require('./services/geminiService');
-const aiService = require('./services/openRouterService'); // Switched to OpenRouter
+const geminiService = require('./services/geminiService');
+const aiService = geminiService; 
+// const aiService = require('./services/openRouterService'); // Switched to OpenRouter
 require('dotenv').config();
 
 const app = express();
@@ -69,7 +70,13 @@ app.use(bodyParser.json());
 
 // Helper: Get or Init User
 const getUser = (id) => {
-  if (!users[id]) users[id] = { state: 'IDLE', isAfk: false, processing: false };
+  if (!users[id]) users[id] = { 
+    state: 'IDLE', 
+    isAfk: false, 
+    processing: false,
+    queue: [],
+    isProcessingQueue: false
+  };
   return users[id];
 };
 
@@ -111,7 +118,9 @@ if (DB_URL && DB_KEY) {
                     client: client,
                     firstName: me.firstName,
                     phone: me.phone,
-                    isAfk: row.is_afk || false
+                    isAfk: row.is_afk || false,
+                    queue: [],
+                    isProcessingQueue: false
                 };
                 
                 console.log(`✅ [System] Session Activated: ${me.firstName} (${userIdStr})`);
@@ -150,7 +159,9 @@ async function syncSessionsFromDB() {
                     state: 'CONNECTED',
                     client: client,
                     firstName: me.firstName,
-                    isAfk: row.is_afk || false
+                    isAfk: row.is_afk || false,
+                    queue: [],
+                    isProcessingQueue: false
                 };
                 startUserbotListener(users[String(me.id)], String(me.id));
                 count++;
@@ -399,107 +410,124 @@ function startUserbotListener(userObj, ownerChatId) {
         const message = event.message;
         const now = Date.now();
         
-        
-        // Log removed to reduce spam: Only logging processed messages below
+        if (!message || message.out) return;
 
         // Ignore messages from the BOT itself to prevent loops
         const senderId = String(message.senderId);
-        if (senderId === String(process.env.TELEGRAM_BOT_TOKEN.split(':')[0])) {
-            return;
-        }
+        const botId = String(process.env.TELEGRAM_BOT_TOKEN.split(':')[0]);
+        if (senderId === botId) return;
 
-        if (!userObj.isAfk) {
-            // console.log("[Userbot] Ignored: Not in AFK mode.");
-            return;
-        }
-        
+        if (!userObj.isAfk) return;
+
         // Determine if it's a private chat
         const isPrivate = message.peerId instanceof Api.PeerUser;
+        if (!isPrivate) return;
+
+        // --- FILTERING ---
+        // 1. Check for Media (Photo, Sticker, Document, etc.)
+        if (message.photo || message.sticker || message.video || message.audio || message.voice || message.document) {
+            console.log(`[Userbot] Ignored media message from ${senderId}`);
+            return;
+        }
+
+        // 2. Check for Emoji-Only text
+        const incomingText = message.text || "";
+        const emojiRegex = /^[\u{1F300}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F900}-\u{1F9FF}\u{1F1E6}-\u{1F1FF}\u{1F3FB}-\u{1F3FF}\u{1F170}-\u{1F251}\u{1F004}\u{1F0CF}\u{1F18E}\u{1F191}-\u{1F19A}\u{203C}\u{2049}\u{2122}\u{2139}\u{2194}-\u{2199}\u{21A9}-\u{21AA}\u{231A}-\u{231B}\u{2328}\u{2388}\u{23CF}\u{23E9}-\u{23F3}\u{23F8}-\u{23FA}\u{24C2}\u{25AA}-\u{25AB}\u{25B6}\u{25C0}\u{25FB}-\u{25FE}\u{2600}-\u{2604}\u{260E}\u{2611}\u{2614}-\u{2615}\u{2618}\u{261D}\u{2620}\u{2622}-\u{2623}\u{2626}\u{262E}-\u{262F}\u{2638}-\u{263A}\u{2640}\u{2642}\u{2648}-\u{2653}\u{265F}\u{2660}\u{2663}\u{2665}-\u{2666}\u{2668}\u{267B}\u{267E}-\u{267F}\u{2692}-\u{2697}\u{2699}\u{269B}-\u{269C}\u{26A0}-\u{26A1}\u{26A7}\u{26AA}-\u{26AB}\u{26B0}-\u{26B1}\u{26BD}-\u{26BE}\u{26C4}-\u{26C5}\u{26C8}\u{26CE}-\u{26CF}\u{26D1}\u{26D3}-\u{26D4}\u{26E9}-\u{26EA}\u{26F0}-\u{26F5}\u{26F7}-\u{26FA}\u{2702}\u{2705}\u{2708}-\u{270D}\u{270F}\u{2712}\u{2714}\u{2716}\u{271D}\u{2721}\u{2728}\u{2733}-\u{2734}\u{2744}\u{2747}\u{274C}\u{274E}\u{2753}-\u{2755}\u{2757}\u{2763}-\u{2764}\u{27A1}\u{27B0}\u{27BF}\u{2934}-\u{2935}\u{2B05}-\u{2B07}\u{2B1B}-\u{2B1C}\u{2B50}\u{2B55}\u{3030}\u{303D}\u{3297}\u{3299}\s]+$/u;
         
-        // Only reply to Private Chats and ignore messages from SELF (me)
-        if (isPrivate && !message.out) {
-            console.log(`[Userbot] Processing private message from ${senderId}`);
-            
-            // 1. Error Silence Period (Stop failure loops)
-            if (errorSilence.has(senderId) && now < errorSilence.get(senderId)) {
-                console.log(`[Userbot] Silence active for ${senderId}.`);
-                return;
-            }
+        if (incomingText && emojiRegex.test(incomingText)) {
+            console.log(`[Userbot] Ignored emoji-only message from ${senderId}`);
+            return;
+        }
 
-            // 2. Cooldown (Don't spam Gemini)
-            if (cooldowns.has(senderId) && (now - cooldowns.get(senderId)) < 5000) {
-                return;
-            }
-            cooldowns.set(senderId, now);
+        if (!incomingText.trim()) return;
 
-            const sender = await message.getSender();
-            
-            // Security: Ignore other bots to prevent infinite loops or spam replies
-            // Check 'bot' flag AND username ending with 'bot' (common convention)
-            if (sender.bot || (sender.username && sender.username.toLowerCase().endsWith('bot'))) {
-                console.log(`[Userbot] Ignored message from bot/service: ${sender.firstName} (@${sender.username})`);
-                return;
-            }
+        // --- QUEUEING ---
+        userObj.queue.push({ message, senderId, now });
+        console.log(`[Userbot] Message from ${senderId} queued. Queue length: ${userObj.queue.length}`);
+        
+        processUserQueue(userObj);
 
-            const senderName = sender.firstName || "Bro";
-            const incomingText = message.text;
-            
-            console.log(`[Userbot] Chat from ${senderName}: ${incomingText}`);
+    }, new NewMessage({ incoming: true })); 
 
-            // --- Keyword Auto-Reply ---
-            const cleanText = incomingText.trim().toLowerCase();
-            const KEYWORD_REPLIES = {
-                'p': 'Oi, kenapa?',
-                'pinjam dulu seratus': 'Gak ada duit bro',
-                'pagi': 'Pagi juga bos!',
-                'malam': 'Malam, ada apa nih?',
-                'dik': 'eitsss no no yh'
-            };
-
-            if (KEYWORD_REPLIES[cleanText]) {
-                const instantReply = KEYWORD_REPLIES[cleanText];
-                console.log(`[Userbot] Keyword Match: "${cleanText}" -> ${instantReply}`);
-                await client.sendMessage(sender.id, { message: instantReply });
-                return; // Gak usah panggil Gemini
-            }
-
-            // --- Gemini AI Fallback ---
-            // Fetch owner name from userObj or client
-            const ownerName = userObj.firstName || "Gue";
-            
-            // Check if first message
-            const isFirstMessage = !userObj.interactedUsers.has(sender.id);
+    // --- QUEUE WORKER ---
+    async function processUserQueue(userObj) {
+        if (userObj.isProcessingQueue || userObj.queue.length === 0) return;
+        
+        userObj.isProcessingQueue = true;
+        
+        while (userObj.queue.length > 0) {
+            const { message, senderId, now } = userObj.queue.shift();
             
             try {
-                const reply = await aiService.generateContent(incomingText, ownerName, isFirstMessage);
-                
-                // Mark as interacted
-                if (isFirstMessage) {
-                    userObj.interactedUsers.add(sender.id);
+                // Determine if it's still relevant (optional: check if AFK was turned off)
+                if (!userObj.isAfk) continue;
+
+                // 1. Error Silence Period
+                if (errorSilence.has(senderId) && Date.now() < errorSilence.get(senderId)) {
+                    console.log(`[Userbot] Silence active for ${senderId}. Skipping.`);
+                    continue;
                 }
-                
-                // Send Reply AS THE USER
-                await client.sendMessage(sender.id, { message: reply });
-            } catch (e) {
-                console.error(`[Userbot] Gemini Error for ${senderName}:`, e.message);
-                
-                // Set silence period for 60 seconds if Quota exceeded
-                if (e.message?.includes('429') || (e.response && e.response.status === 429)) {
-                    errorSilence.set(senderId, now + 60000); 
-                    console.log(`[Userbot] Quota Exceeded. Silencing ${senderName} for 60s.`);
+
+                // 2. Cooldown
+                if (cooldowns.has(senderId) && (Date.now() - cooldowns.get(senderId)) < 5000) {
+                    console.log(`[Userbot] Cooldown active for ${senderId}. Skipping.`);
+                    continue;
                 }
+                cooldowns.set(senderId, Date.now());
+
+                const sender = await message.getSender();
+                if (!sender || sender.bot || (sender.username && sender.username.toLowerCase().endsWith('bot'))) {
+                    console.log(`[Userbot] Ignored bot/service: ${senderId}`);
+                    continue;
+                }
+
+                const senderName = sender.firstName || "Bro";
+                const incomingText = message.text;
                 
-                await client.sendMessage(sender.id, { message: "Ada masalah teknis nih bro. Coba lagi ya." });
+                console.log(`[Userbot] Processing queued chat from ${senderName}: ${incomingText}`);
+
+                // --- Keyword Auto-Reply ---
+                const cleanText = incomingText.trim().toLowerCase();
+                const KEYWORD_REPLIES = {
+                    'p': 'Oi, kenapa?',
+                    'pinjam dulu seratus': 'Gak ada duit bro',
+                    'pagi': 'Pagi juga bos!',
+                    'malam': 'Malam, ada apa nih?',
+                    'dik': 'eitsss no no yh'
+                };
+
+                if (KEYWORD_REPLIES[cleanText]) {
+                    const instantReply = KEYWORD_REPLIES[cleanText];
+                    await client.sendMessage(sender.id, { message: instantReply });
+                } else {
+                    // --- Gemini AI Fallback ---
+                    const ownerName = process.env.OWNER_NAME || userObj.firstName || "Gue";
+                    const isFirstMessage = !userObj.interactedUsers.has(sender.id);
+                    
+                    try {
+                        const reply = await aiService.generateContent(incomingText, ownerName, isFirstMessage);
+                        if (isFirstMessage) userObj.interactedUsers.add(sender.id);
+                        await client.sendMessage(sender.id, { message: reply });
+                    } catch (e) {
+                        console.error(`[Userbot] Service Error for ${senderName}:`, e.message);
+                        if (e.message?.includes('429')) errorSilence.set(senderId, Date.now() + 60000);
+                        await client.sendMessage(sender.id, { message: "Ada masalah teknis nih bro. Coba lagi ya." });
+                    }
+                }
+
+            } catch (err) {
+                console.error("[Userbot] Queue processing item error:", err);
+            }
+
+            // Wait 10 seconds before processing next message in queue
+            if (userObj.queue.length > 0) {
+                console.log(`[Userbot] Waiting 10s before next queue item for owner...`);
+                await new Promise(resolve => setTimeout(resolve, 10000));
             }
         }
         
-        // Auto-Disable if User replies manually?
-        // Checking message.out === true is tricky because the BOT sending is also "out".
-        // We'd need to distinguish Bot-sent vs User-sent. 
-        // Simple heuristic: If message.out AND message.message !== lastBotReply, then User typed it.
-        // Skipping for MVP stability.
-        
-    }, new NewMessage({ incoming: true })); 
+        userObj.isProcessingQueue = false;
+    }
     
     console.log(`Userbot listener started for ${userObj.phone}`);
 }
