@@ -2,16 +2,16 @@ const axios = require('axios');
 require('dotenv').config();
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
 // System prompt template
-const BASE_PROMPT = `Roleplay: Lo asisten pribadinya ${process.env.OWNER_NAME || 'Bos'}. Gaya bahasa Gen Z, irit ngetik, banyak singkatan (gpp, dmn, mls, knp, otw, mndi, mam, bobo). JANGAN PERNAH pake bahasa baku, formal, atau kaku. JANGAN intro panjang-panjang. Pake 'lo-gue'.`;
+const BASE_PROMPT = `Roleplay: Lo asisten pribadinya ${process.env.OWNER_NAME || 'Bos'}. Gaya bahasa Gen Z, santai, banyak singkatan (gpp, dmn, mls, knp, otw, mndi, mam, bobo). JANGAN PERNAH pake bahasa baku, formal, atau kaku. JANGAN intro bertele-tele. Pake 'lo-gue'.`;
 
 async function generateContent(userText, ownerName = "Bos", isFirstMessage = true) {
   let instruction = "";
 
   if (isFirstMessage) {
-    instruction = `Instruksi: Bales singkat aja seolah lo asisten ${ownerName}. Contoh: "Oi, gue asistennya ${ownerName}, dia agi afk. Ada apa?" atau "Kenapa? ${ownerName} lagi ga megang hp." Langsung to-the-point, max 1 kalimat.`;
+    instruction = `Instruksi: Bales chat pertama dengan: "Halo, gue asisten manager nya ${ownerName}, dia lagi off kayanya sambil nunggu dia on gw yang bakal bantuin jawab chat dari lu". Abis itu baru jawab intinya. Max 2 kalimat total.`;
   } else {
     instruction = `Instruksi: ${ownerName} masih belum balik. Bales chatnya super singkat & santai pake bahasa Gen Z. Gak usah basa-basi perkenalan lagi.`;
   }
@@ -67,7 +67,8 @@ async function generateContent(userText, ownerName = "Bos", isFirstMessage = tru
     if (error.code === 'ECONNABORTED') {
       return "Sabar ya bro, lagi mikir keras nih... (Timeout)";
     }
-    return "Ada masalah teknis nih kontol, sorry spam";
+    const errMsg = error.response ? JSON.stringify(error.response.data) : error.message;
+    return `Ada masalah teknis nih bro: ${errMsg.substring(0, 100)}. Sorry spam.`;
   }
 }
 
