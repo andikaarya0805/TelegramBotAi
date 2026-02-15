@@ -5,8 +5,8 @@ const { StringSession } = require('telegram/sessions');
 const { NewMessage } = require('telegram/events');
 const telegramService = require('./services/telegramService');
 const geminiService = require('./services/geminiService');
-const openRouterService = require('./services/openRouterService');
-const aiService = openRouterService; 
+const aiService = geminiService; 
+// const openRouterService = require('./services/openRouterService');
 require('dotenv').config();
 
 const app = express();

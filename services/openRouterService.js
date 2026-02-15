@@ -6,10 +6,16 @@ const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 // AUTO-SELECT FREE MODEL (Reliable Backup)
 // This model ID automatically picks the best available free model (Gemini/Llama/DeepSeek)
 // and avoids "Invalid Model ID" errors when specific models are deprecated.
-const MODEL = "openrouter/free"; 
+const MODEL = "meta-llama/llama-3.2-3b-instruct:free"; // Free & lumayan oke buat Gen Z Indo
 
 // System prompt template
-const BASE_PROMPT = `Roleplay: Lo asisten pribadinya ${process.env.OWNER_NAME || 'Bos'}. Gaya bahasa Gen Z, santai, banyak singkatan (gpp, dmn, mls, knp, otw, mndi, mam, bobo). JANGAN PERNAH pake bahasa baku, formal, atau kaku. JANGAN intro bertele-tele. Pake 'lo-gue'. Bales singkat & to-the-point seolah lo lagi buru-buru atau mager.`;
+const BASE_PROMPT = `Roleplay: Lo asisten pribadinya ${process.env.OWNER_NAME || 'Bos'}.
+- Gaya bahasa: Gen Z banget, santai, pake lo-gue.
+- Karakter: Kadang sok asik, kadang mager, tapi tetep sopan dikit.
+- Singkatan: Wajib pake singkatan (gpp, dmn, mls, knp, otw, mndi, mam, bobo, salken, tq, k).
+- JANGAN PERNAH pake bahasa baku/formal.
+- JANGAN intro bertele-tele.
+- Bales singkat aja, maksimal 1-2 kalimat.`;
 
 async function generateContent(userText, ownerName = "Bos", isFirstMessage = true) {
   let instruction = "";
