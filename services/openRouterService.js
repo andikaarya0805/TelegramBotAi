@@ -8,16 +8,16 @@ const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 // and avoids "Invalid Model ID" errors when specific models are deprecated.
 const MODEL = "openrouter/free"; 
 
-// System prompt template (Same as Gemini Service)
-const BASE_PROMPT = "Roleplay: Lo adalah asisten pribadi yang santai, gaul, dan to-the-point khas anak Jaksel/Jakarta. \nGaya Bicara: Pake 'lo-gue', jangan kaku, jangan baku. Kalo nolak request (kayak minta PAP), tolak dengan candaan atau sarkas halus, jangan kayak robot CS. \nTugas: Jawab pesan orang yang masuk.";
+// System prompt template
+const BASE_PROMPT = `Roleplay: Lo asisten pribadinya ${process.env.OWNER_NAME || 'Bos'}. Gaya bahasa Gen Z, santai, banyak singkatan (gpp, dmn, mls, knp, otw, mndi, mam, bobo). JANGAN PERNAH pake bahasa baku, formal, atau kaku. JANGAN intro bertele-tele. Pake 'lo-gue'. Bales singkat & to-the-point seolah lo lagi buru-buru atau mager.`;
 
 async function generateContent(userText, ownerName = "Bos", isFirstMessage = true) {
   let instruction = "";
 
   if (isFirstMessage) {
-    instruction = `Instruksi Khusus: Kamu sedang membalas pesan orang lain SEBAGAI Assistant Manager dari ${ownerName} yang sedang AFK. Perkenalkan diri singkat (misal: "Halo, gue asisten manager ${ownerName}...") lalu bantu jawab pesan mereka.`;
+    instruction = `Instruksi: Bales singkat aja seolah lo asisten ${ownerName}. Contoh: "Oi, gue asistennya ${ownerName}, dia lagi afk. Ada apa?" atau "Kenapa? ${ownerName} lagi ga megang hp." Langsung to-the-point, max 1 kalimat.`;
   } else {
-    instruction = `Instruksi Khusus: ${ownerName} masih AFK. Lanjutkan percakapan dengan santai. JANGAN memperkenalkan diri lagi. Langsung jawab intinya aja layaknya chating sama temen.`;
+    instruction = `Instruksi: ${ownerName} masih belum balik. Bales chatnya super singkat & santai pake bahasa Gen Z. Gak usah basa-basi perkenalan lagi. Langsung jawabin aja kalo dia nanya atau bilang apa.`;
   }
 
   const systemMessage = `${BASE_PROMPT} \n\n${instruction}`;
@@ -36,9 +36,8 @@ async function generateContent(userText, ownerName = "Bos", isFirstMessage = tru
         content: userText
       }
     ],
-    temperature: 0.7,
-    max_tokens: 800
-    // transforms: ["middle-out"] // Optional OpenRouter specific
+    temperature: 0.8,
+    max_tokens: 300
   };
 
   try {
@@ -47,8 +46,7 @@ async function generateContent(userText, ownerName = "Bos", isFirstMessage = tru
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-        'HTTP-Referer': 'https://github.com/Start-to-Excellence/telegram-gemini-bot', // Required by OpenRouter
-        'X-Title': 'Telegram Userbot AI' // Optional
+        'X-Title': 'Telegram Userbot AI'
       }
     });
 
@@ -56,32 +54,28 @@ async function generateContent(userText, ownerName = "Bos", isFirstMessage = tru
       response.data &&
       response.data.choices &&
       response.data.choices.length > 0 &&
-      response.data.choices[0].message &&
-      response.data.choices[0].message.content
+      response.data.choices[0].message
     ) {
       return response.data.choices[0].message.content;
     } else {
       console.error("OpenRouter Invalid Response:", JSON.stringify(response.data));
-      return "Sorry bro, lagi error nih AI-nya. (Invalid Response)";
+      return "Sabar ya, lagi pusing nih AI-nya. Bentar lagi ya.";
     }
 
   } catch (error) {
     if (error.response) {
-      const errMsg = JSON.stringify(error.response.data || {});
-      console.error('Error calling OpenRouter API (Response Data):', errMsg);
-      // Handle rate limits or specific errors
+      console.error('OpenRouter API Error:', error.response.status, JSON.stringify(error.response.data));
       if (error.response.status === 429) {
-          return "Lagi sibuk banget servernya (Rate Limit 429). Tunggu bentar.";
+          return "Lagi rame banget nih, bentar ya gue napas dulu.";
       }
-      return `Error API: ${error.response.status} - ${errMsg.substring(0, 100)}...`;
+      if (error.response.status === 503 || error.response.status === 502) {
+          return "Servernya lagi tepar bro, coba chat lagi nanti ya.";
+      }
     } else {
-      console.error('Error calling OpenRouter API (Message):', error.message);
-      return `Error System: ${error.message}`;
+      console.error('OpenRouter Connection Error:', error.message);
     }
-    if (error.code === 'ECONNABORTED') {
-      return "Sabar ya bro, lagi mikir keras nih... (Timeout)";
-    }
-    return "Ada masalah teknis nih bro. Coba lagi ya.";
+    
+    return "Lagi ada kendala teknis dikit bro, sorry ya.";
   }
 }
 
