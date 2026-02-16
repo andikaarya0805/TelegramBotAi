@@ -39,6 +39,14 @@ const API_HASH = process.env.API_HASH;
       const supabase = createClient(DB_URL, DB_KEY);
       const me = await client.getMe();
       
+      console.log("\n============================================");
+      console.log("✅ LOGIN SUCCESS!");
+      console.log("Paste info ini ke Supabase (Table: user_sessions):");
+      console.log("--------------------------------------------");
+      console.log("👉 chat_id       :", me.id.toString());
+      console.log("👉 session_string:", sessionString);
+      console.log("============================================\n");
+      
       const { error } = await supabase
           .from('user_sessions')
           .upsert({ 

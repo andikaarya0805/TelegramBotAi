@@ -398,6 +398,7 @@ function startUserbotListener(userObj, ownerChatId) {
     const client = userObj.client;
     // Cache for session
     const interactedUsers = new Set();
+    const chatHistory = new Map(); // Store chat history: senderId -> [{ role, parts }]
     const cooldowns = new Map();
     const errorSilence = new Map();
     
@@ -505,8 +506,23 @@ function startUserbotListener(userObj, ownerChatId) {
                     const isFirstMessage = !userObj.interactedUsers.has(sender.id);
                     
                     try {
-                        const reply = await aiService.generateContent(incomingText, ownerName, isFirstMessage);
+                        // Retrieve history
+                        let history = chatHistory.get(sender.id) || [];
+                        
+                        const reply = await aiService.generateContent(incomingText, history, ownerName, isFirstMessage);
+                        
                         if (isFirstMessage) userObj.interactedUsers.add(sender.id);
+                        
+                        // Update History
+                        history.push({ role: "user", parts: [{ text: incomingText }] });
+                        history.push({ role: "model", parts: [{ text: reply }] });
+                        
+                        // Limit history to last 20 messages (10 turns) to save tokens/memory
+                        if (history.length > 20) {
+                            history = history.slice(history.length - 20);
+                        }
+                        chatHistory.set(sender.id, history);
+
                         await client.sendMessage(sender.id, { message: reply });
                     } catch (e) {
                         console.error(`[Userbot] Service Error for ${senderName}:`, e.message);
