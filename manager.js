@@ -503,15 +503,16 @@ function startUserbotListener(userObj, ownerChatId) {
                 } else {
                     // --- Gemini AI Fallback ---
                     const ownerName = process.env.OWNER_NAME || userObj.firstName || "Gue";
-                    const isFirstMessage = !userObj.interactedUsers.has(sender.id);
+                    const senderIdStr = String(sender.id); // Normalize BigInt to String
+                    const isFirstMessage = !userObj.interactedUsers.has(senderIdStr);
                     
                     try {
                         // Retrieve history
-                        let history = chatHistory.get(sender.id) || [];
+                        let history = chatHistory.get(senderIdStr) || [];
                         
                         const reply = await aiService.generateContent(incomingText, history, ownerName, isFirstMessage);
                         
-                        if (isFirstMessage) userObj.interactedUsers.add(sender.id);
+                        if (isFirstMessage) userObj.interactedUsers.add(senderIdStr);
                         
                         // Update History
                         history.push({ role: "user", parts: [{ text: incomingText }] });
@@ -521,7 +522,7 @@ function startUserbotListener(userObj, ownerChatId) {
                         if (history.length > 20) {
                             history = history.slice(history.length - 20);
                         }
-                        chatHistory.set(sender.id, history);
+                        chatHistory.set(senderIdStr, history);
 
                         await client.sendMessage(sender.id, { message: reply });
                     } catch (e) {
