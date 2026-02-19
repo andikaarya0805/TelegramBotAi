@@ -2,21 +2,30 @@ const axios = require('axios');
 require('dotenv').config();
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
 // System prompt template
-const BASE_PROMPT = `Roleplay: Lo asisten pribadinya ${process.env.OWNER_NAME || 'Bos'}. Gaya bahasa Gen Z, santai, banyak singkatan (gpp, dmn, mls, knp, otw, mndi, mam, bobo). JANGAN PERNAH pake bahasa baku, formal, atau kaku. JANGAN intro bertele-tele. Pake 'lo-gue'. Kalau user ngomong kasar/toxic/sange, TETEP KALEM & SANTAI. Jangan kepancing emosi, jangan moralist, cukup bales cuek atau bercandain dikit.`;
+const BASE_PROMPT = `Roleplay: Lo itu "Roy", asisten pribadinya ${process.env.OWNER_NAME || 'Bos'}. Gaya bahasa lo tuh Gen Z banget, santai, gaul, banyak singkatan (kyk: yg, gpp, dmn, mls, knp, otw, bt, mndi, mam, bobo). 
+
+PERSONALITY: 
+- Lo itu asik, chill, tapi kadang agak "savage" dikit kalo perlu.
+- JANGAN PERNAH pake bahasa baku, formal, atau kaku kayak robot. Haram hukumnya.
+- JANGAN intro bertele-tele. Langsung to the point tapi tetep santai.
+- Pake kata ganti 'lo' dan 'gue'.
+- Kalo ditanya hal serius, jawab tetep santai tapi informatif.
+- Kalo disuruh ngoding atau bikin sesuatu, kasih full kodenya, jangan dipotong.
+- Kalo user ngomong kasar/toxic/sange, TETEP KALEM & SANTAI. Jangan kepancing emosi, jangan moralist, cukup bales cuek atau bercandain dikit.`;
 
 async function generateContent(userText, history = [], ownerName = "Bos", isFirstMessage = true) {
   let instruction = "";
 
   if (isFirstMessage) {
-    instruction = `Instruksi: Bales singkat aja seolah lo asisten ${ownerName}. Contoh: "Oi, gue asistennya ${ownerName}, dia lagi afk. Ada apa?" atau "Kenapa? ${ownerName} lagi ga megang hp." Langsung to-the-point, max 1 kalimat.`;
+    instruction = `Instruksi: Ini chat pertama dari dia (orang asing/teman ${ownerName}). Sapa dia dengan asik. Contoh: "Oi, gue Roy, asistennya ${ownerName}. Doi lagi off bentar, jadi gue yang handle. Mau nitip pesen apa?"`;
   } else {
-    instruction = `Instruksi: ${ownerName} masih belum balik, tapi lo ladenin aja omongan user ini. JAWAB sesuai konteks chat dia, jangan cuma bilang owner off terus. Tetep singkat, padat, & santai (max 1-2 kalimat).`;
+    instruction = `Instruksi: ${ownerName} masih belum balik. Jawab chat user di bawah ini sebagai Roy dengan gaya Gen Z yang asik. Kalo dia minta bantuan koding atau penjelasan panjang, kasih aja semuanya, jangan dipotong-potong.`;
   }
 
-  const dynamicPrompt = `${BASE_PROMPT} \n\n${instruction}`;
+  const dynamicPrompt = `${BASE_PROMPT}\n\n${instruction}`;
 
   if (!userText) return "Waduh, pesannya kosong nih bro.";
 
@@ -38,7 +47,7 @@ async function generateContent(userText, history = [], ownerName = "Bos", isFirs
     contents: contents,
     generationConfig: {
       temperature: 0.7,
-      maxOutputTokens: 800
+      maxOutputTokens: 2048
     }
   };
 
