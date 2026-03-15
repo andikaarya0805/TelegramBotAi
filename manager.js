@@ -89,51 +89,61 @@ console.log(`[System] Supabase Config: URL=${DB_URL ? 'PRESENT' : 'MISSING'}, KE
 
 if (DB_URL && DB_KEY) {
     console.log("[System] Initializing Supabase client...");
-    const supabase = createClient(DB_URL, DB_KEY);
+    // Force IPv4 for the internal fetch if possible by using a custom global fetch wrapper if needed
+    // but first let's just add better error logging to see the CAUSE.
+    const supabase = createClient(DB_URL, DB_KEY, {
+        auth: { persistSession: false },
+        global: {
+          fetch: (url, options) => fetch(url, { ...options, family: 4 }) // Attempt to force IPv4
+        }
+    });
     
     (async () => {
         console.log("[System] Fetching sessions from Supabase...");
-        const { data, error } = await supabase.from('user_sessions').select('*');
-        
-        if (error) {
-            console.error("[System] Supabase Fetch Error:", error.message);
-            return;
-        }
-
-        console.log(`[System] Found ${data.length} sessions to initialize.`);
-        
-        for (const row of data) {
-            if (!row.session_string) continue;
+        try {
+            const { data, error } = await supabase.from('user_sessions').select('*');
             
-            console.log(`[System] Initializing session for: ${row.first_name || row.chat_id}`);
-            const session = new StringSession(row.session_string);
-            const client = new TelegramClient(session, API_ID, API_HASH, { 
-                connectionRetries: 5, 
-                useWSS: false 
-            });
+            if (error) {
+                console.error("[System] Supabase Fetch Error:", error.message);
+                console.error("[System] Hint: Check if table 'user_sessions' exists and DB_KEY has correct permissions.");
+                return;
+            }
 
-            client.connect().then(async () => {
-                const me = await client.getMe();
-                const userIdStr = String(me.id);
+            console.log(`[System] Found ${data.length} sessions to initialize.`);
+            
+            for (const row of data) {
+                if (!row.session_string) continue;
                 
-                users[userIdStr] = {
-                    state: 'CONNECTED',
-                    client: client,
-                    firstName: me.firstName,
-                    phone: me.phone,
-                    isAfk: row.is_afk || false,
-                    queue: [],
-                    isProcessingQueue: false
-                };
-                
-                console.log(`✅ [System] Session Activated: ${me.firstName} (${userIdStr})`);
-                startUserbotListener(users[userIdStr], userIdStr);
-            }).catch(e => {
-                console.error(`❌ [System] Failed to connect ${row.first_name || row.chat_id}:`, e.message);
-                if (e.message.includes('406')) {
-                   console.error("   └─ Hint: This session is already active elsewhere (Duplicate).");
-                }
-            });
+                console.log(`[System] Initializing session for: ${row.first_name || row.chat_id}`);
+                const session = new StringSession(row.session_string);
+                const client = new TelegramClient(session, API_ID, API_HASH, { 
+                    connectionRetries: 5, 
+                    useWSS: false 
+                });
+
+                client.connect().then(async () => {
+                    const me = await client.getMe();
+                    const userIdStr = String(me.id);
+                    
+                    users[userIdStr] = {
+                        state: 'CONNECTED',
+                        client: client,
+                        firstName: me.firstName,
+                        phone: me.phone,
+                        isAfk: row.is_afk || false,
+                        queue: [],
+                        isProcessingQueue: false
+                    };
+                    
+                    console.log(`✅ [System] Session Activated: ${me.firstName} (${userIdStr})`);
+                    startUserbotListener(users[userIdStr], userIdStr);
+                }).catch(e => {
+                    console.error(`❌ [System] Failed to connect ${row.first_name || row.chat_id}:`, e.message);
+                });
+            }
+        } catch (fetchErr) {
+            console.error("[System] Supabase CRITICAL Fetch Error:", fetchErr.message);
+            if (fetchErr.stack) console.error(fetchErr.stack);
         }
     })();
 } else {

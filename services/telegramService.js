@@ -18,8 +18,7 @@ async function sendMessage(chatId, text) {
       text: text,
     }, {
       timeout: 10000,
-      // Force IPv4 if needed. Sometimes Railway/Node has issues with IPv6 resolving.
-      // family: 4 
+      family: 4 // Force IPv4 to prevent AggregateError in some environments
     });
 
     console.log(`Message sent to ${chatId}: ${text.substring(0, 20)}...`);
