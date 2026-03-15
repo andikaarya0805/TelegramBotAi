@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
 const { TelegramClient, Api } = require('telegram');
@@ -7,7 +8,6 @@ const telegramService = require('./services/telegramService');
 const geminiService = require('./services/geminiService');
 const aiService = geminiService; 
 // const openRouterService = require('./services/openRouterService');
-require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;

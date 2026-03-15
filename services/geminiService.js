@@ -1,9 +1,6 @@
 const axios = require('axios');
 require('dotenv').config();
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${GEMINI_API_KEY}`;
-
 // System prompt template
 const BASE_PROMPT = `Lo adalah "Roy", asisten pribadinya ${process.env.OWNER_NAME || 'Bos'}. 
 
@@ -28,6 +25,14 @@ CARA LO NGOMONG:
 - Kalo pertanyaannya beneran susah atau teknikal, lo jawab serius tapi tetep dengan nada lo yang khas: dingin, efisien, gak sabar.`;
 
 async function generateContent(userText, history = [], ownerName = "Bos", isFirstMessage = true) {
+  const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+  if (!GEMINI_API_KEY) {
+    console.error('ERROR: GEMINI_API_KEY is missing in process.env');
+    return "Waduh, API key Gemini-nya gak ada nih bro. Cek .env atau Railway.";
+  }
+
+  const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${GEMINI_API_KEY}`;
+
   let instruction = "";
 
   if (isFirstMessage) {

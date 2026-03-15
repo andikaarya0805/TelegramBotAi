@@ -1,27 +1,48 @@
 const axios = require('axios');
 require('dotenv').config();
 
-const TELEGRAM_API_URL = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}`;
-
 async function sendMessage(chatId, text) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) {
+    console.error('ERROR: TELEGRAM_BOT_TOKEN is missing in process.env');
+    return;
+  }
+
+  const TELEGRAM_API_URL = `https://api.telegram.org/bot${token}`;
+
   try {
-    if (!text) return; // Don't send empty messages
+    if (!text) return;
 
     const response = await axios.post(`${TELEGRAM_API_URL}/sendMessage`, {
       chat_id: chatId,
       text: text,
-      // parse_mode: 'Markdown' // Disabled for debugging to avoid parse errors
+    }, {
+      timeout: 10000,
+      // Force IPv4 if needed. Sometimes Railway/Node has issues with IPv6 resolving.
+      // family: 4 
     });
 
     console.log(`Message sent to ${chatId}: ${text.substring(0, 20)}...`);
     return response.data;
   } catch (error) {
-    console.error('Error sending Telegram message:', error.response ? error.response.data : error.message);
+    if (error.response) {
+      console.error('Error sending Telegram message (Response):', error.response.data);
+    } else {
+      console.error('Error sending Telegram message (No Response):', error.message);
+    }
     throw error;
   }
 }
 
 async function setWebhook(url) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) {
+    console.error('ERROR: TELEGRAM_BOT_TOKEN is missing in process.env');
+    return;
+  }
+
+  const TELEGRAM_API_URL = `https://api.telegram.org/bot${token}`;
+
   try {
     const response = await axios.post(`${TELEGRAM_API_URL}/setWebhook`, {
       url: `${url}/webhook`
