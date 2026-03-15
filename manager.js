@@ -85,7 +85,10 @@ const { createClient } = require('@supabase/supabase-js');
 const DB_URL = process.env.DB_URL;
 const DB_KEY = process.env.DB_KEY;
 
+console.log(`[System] Supabase Config: URL=${DB_URL ? 'PRESENT' : 'MISSING'}, KEY=${DB_KEY ? 'PRESENT' : 'MISSING'}`);
+
 if (DB_URL && DB_KEY) {
+    console.log("[System] Initializing Supabase client...");
     const supabase = createClient(DB_URL, DB_KEY);
     
     (async () => {
