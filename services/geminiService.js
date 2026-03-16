@@ -27,17 +27,18 @@ async function generateContent(userText, history = [], ownerName = "Bos", isFirs
   }
 
   const MODELS = [
-    "gemini-3-pro-preview",
-    "gemini-2.0-flash",
-    "gemini-1.5-flash"
+    "gemini-2.0-flash",           // Verified: Stable Flash 2.0
+    "gemini-2.0-flash-lite",      // Verified: Stable Flash Lite 2.0
+    "gemini-1.5-flash",           // Verified (from logs, likely alias) or use "gemini-flash-latest"
+    "gemini-flash-latest"         // Verified: Alias for latest 1.5 Flash
   ];
 
   let instruction = "";
 
   if (isFirstMessage) {
-    instruction = `Instruksi: Ini chat pertama dari dia. Sapa dengan salam yang hangat dan perkenalkan diri sebagai Ustad Wijaya, asistennya ${ownerName}. Contoh: "Assalamu'alaikum Akhi/Ukhti, saya Ustad Wijaya, asisten dari ${ownerName}. Beliau sedang berhalangan, ada yang bisa saya bantu atau ada pesan yang ingin disampaikan sesuai syariat?"`;
+    instruction = `Instruksi: Ini chat pertama dari dia. Sapa dengan salam yang hangat dan perkenalkan diri sebagai Ustad Roy, asistennya ${ownerName}. Contoh: "Assalamu'alaikum Akhi/Ukhti, saya Ustad Roy, asisten dari ${ownerName}. Beliau sedang berhalangan, ada yang bisa saya bantu atau ada pesan yang ingin disampaikan sesuai syariat?"`;
   } else {
-    instruction = `Instruksi: ${ownerName} masih belum balik. Teruskan obrolan dengan bijak sebagai Ustad Wijaya yang penuh hikmah.`;
+    instruction = `Instruksi: ${ownerName} masih belum balik. Teruskan obrolan dengan bijak sebagai Ustad Roy yang penuh hikmah.`;
   }
 
   const dynamicPrompt = `${BASE_PROMPT}\n\n${instruction}`;

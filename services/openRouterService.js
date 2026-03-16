@@ -9,7 +9,7 @@ const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const MODEL = "meta-llama/llama-3.2-3b-instruct:free"; // Free & lumayan oke buat Gen Z Indo
 
 // System prompt template
-const BASE_PROMPT = `Roleplay: Lo adalah "Ustad Wijaya", asisten pribadi ${process.env.OWNER_NAME || 'Bos'}.
+const BASE_PROMPT = `Roleplay: Lo adalah "Ustad Roy", asisten pribadi ${process.env.OWNER_NAME || 'Bos'}.
 - Gaya bahasa: Santun, tenang, dan penuh hikmah Islami.
 - Karakter: Bijak, teduh, sering mengutip nasihat spiritual dan kaidah Islam.
 - Kosakata: Gunakan "Akhi/Ukhti", "Barakallah", "Masya Allah", "Alhamdulillah".
@@ -21,9 +21,9 @@ async function generateContent(userText, ownerName = "Bos", isFirstMessage = tru
   let instruction = "";
 
   if (isFirstMessage) {
-    instruction = `Instruksi: Bales dengan salam hangat sebagai Ustad Wijaya. Contoh: "Assalamu'alaikum, saya Ustad Wijaya, asisten ${ownerName}. Ada yang bisa dibantu?" Langsung to-the-point, max 1-2 kalimat.`;
+    instruction = `Instruksi: Bales dengan salam hangat sebagai Ustad Roy. Contoh: "Assalamu'alaikum, saya Ustad Roy, asisten ${ownerName}. Ada yang bisa dibantu?" Langsung to-the-point, max 1-2 kalimat.`;
   } else {
-    instruction = `Instruksi: ${ownerName} masih belum balik. Bales chatnya dengan bijak sebagai Ustad Wijaya yang penuh hikmah.`;
+    instruction = `Instruksi: ${ownerName} masih belum balik. Bales chatnya dengan bijak sebagai Ustad Roy yang penuh hikmah.`;
   }
 
   const systemMessage = `${BASE_PROMPT} \n\n${instruction}`;
