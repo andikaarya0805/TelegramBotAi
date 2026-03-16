@@ -31,7 +31,11 @@ async function generateContent(userText, history = [], ownerName = "Bos", isFirs
     return "Waduh, API key Gemini-nya gak ada nih bro. Cek .env atau Railway.";
   }
 
-  const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${GEMINI_API_KEY}`;
+  const MODELS = [
+    "gemini-3-pro-preview",
+    "gemini-2.0-flash",
+    "gemini-1.5-flash"
+  ];
 
   let instruction = "";
 
@@ -54,52 +58,67 @@ async function generateContent(userText, history = [], ownerName = "Bos", isFirs
     }
   ];
 
-  const payload = {
-    system_instruction: {
-      parts: [{
-        text: dynamicPrompt
-      }]
-    },
-    contents: contents,
-    generationConfig: {
-      temperature: 0.7,
-      maxOutputTokens: 2048
-    }
-  };
+  let lastError = null;
 
-  try {
-    const response = await axios.post(GEMINI_URL, payload, {
-      timeout: 30000,
-      headers: {
-        'Content-Type': 'application/json'
+  for (let attempt = 0; attempt < MODELS.length; attempt++) {
+    const currentModel = MODELS[attempt];
+    const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${GEMINI_API_KEY}`;
+
+    const payload = {
+      system_instruction: {
+        parts: [{ text: dynamicPrompt }]
+      },
+      contents: contents,
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 2048
       }
-    });
+    };
 
-    if (
-      response.data &&
-      response.data.candidates &&
-      response.data.candidates.length > 0 &&
-      response.data.candidates[0].content &&
-      response.data.candidates[0].content.parts &&
-      response.data.candidates[0].content.parts.length > 0
-    ) {
-      return response.data.candidates[0].content.parts[0].text;
-    } else {
-      return "Sorry bro, lagi error nih AI-nya. Coba lagi nanti ya.";
-    }
+    try {
+      console.log(`[Gemini] Attempt ${attempt + 1}: Using model ${currentModel}...`);
+      const response = await axios.post(GEMINI_URL, payload, {
+        timeout: 30000,
+        headers: { 'Content-Type': 'application/json' }
+      });
 
-  } catch (error) {
-    if (error.response) {
-      console.error('Error calling Gemini API (Response Data):', JSON.stringify(error.response.data, null, 2));
-    } else {
-      console.error('Error calling Gemini API (Message):', error.message);
+      if (
+        response.data &&
+        response.data.candidates &&
+        response.data.candidates.length > 0 &&
+        response.data.candidates[0].content &&
+        response.data.candidates[0].content.parts &&
+        response.data.candidates[0].content.parts.length > 0
+      ) {
+        return response.data.candidates[0].content.parts[0].text;
+      }
+    } catch (error) {
+      lastError = error;
+      const statusCode = error.response ? error.response.status : 'NETWORK_ERROR';
+      const errorData = error.response ? JSON.stringify(error.response.data) : error.message;
+
+      console.error(`[Gemini] Attempt ${attempt + 1} (${currentModel}) failed with status ${statusCode}:`, errorData);
+
+      if (statusCode === 429) {
+        // If it's a rate limit, wait a bit before trying the next model (fallback)
+        console.log(`[Gemini] Model ${currentModel} rate limited. Trying fallback...`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        continue;
+      } else {
+        // For other errors, we might still want to try fallback, but let's break if it's a permanent error like 400
+        if (statusCode === 400 || statusCode === 401 || statusCode === 403) break;
+        continue;
+      }
     }
-    if (error.code === 'ECONNABORTED') {
-      return "Sabar ya bro, lagi mikir keras nih... (Timeout)";
-    }
-    const errMsg = error.response ? JSON.stringify(error.response.data) : error.message;
-    return `Ada masalah teknis nih bro: ${errMsg.substring(0, 100)}. Sorry spam.`;
   }
+
+  // If all attempts failed
+  if (lastError) {
+    if (lastError.code === 'ECONNABORTED') return "Sabar ya bro, lagi mikir keras nih... (Timeout)";
+    const finalMsg = lastError.response ? `Error ${lastError.response.status}` : lastError.message;
+    return `Waduh, lagi ada gangguan teknis (Gemini error: ${finalMsg}). Coba lagi bentar ya bro.`;
+  }
+  return "Sorry bro, lagi error nih AI-nya. Coba lagi nanti ya.";
 }
 
 module.exports = {
